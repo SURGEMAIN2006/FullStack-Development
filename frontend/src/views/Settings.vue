@@ -49,23 +49,23 @@
         <div class="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 text-xs space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-slate-600 font-medium">System Version</span>
-            <strong class="text-indigo-950 font-mono">LibraSphere v2.0 (Vue 3 Architecture)</strong>
+            <strong class="text-indigo-950 font-mono">LibraSphere v1.0.0</strong>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-slate-600 font-medium">Frontend Framework</span>
-            <strong class="text-indigo-950 font-mono">Vue.js 3 + Vite + Tailwind CSS</strong>
+            <strong class="text-indigo-950 font-mono">Vue 3 + Vite + Tailwind CSS</strong>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-slate-600 font-medium">Backend API Engine</span>
-            <strong class="text-indigo-950 font-mono">Node.js + Express REST Engine</strong>
+            <span class="text-slate-600 font-medium">Backend Server</span>
+            <strong class="text-indigo-950 font-mono">Node.js + Express.js API</strong>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-slate-600 font-medium">Database Layer</span>
-            <strong class="text-indigo-950 font-mono">MySQL Engine / Dual Fallback Interface</strong>
+            <span class="text-slate-600 font-medium">Database</span>
+            <strong class="text-indigo-950 font-mono">MySQL Database</strong>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-slate-600 font-medium">Authentication</span>
-            <strong class="text-indigo-950 font-mono">JWT Bearer Token + bcrypt (10 rounds)</strong>
+            <strong class="text-indigo-950 font-mono">JWT + bcrypt</strong>
           </div>
         </div>
       </div>

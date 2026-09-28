@@ -2,7 +2,7 @@
   <div v-if="loading" class="min-h-screen bg-slate-950 flex items-center justify-center text-white">
     <div class="flex flex-col items-center gap-3">
       <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      <p class="text-sm font-semibold text-slate-400">Loading LibraSphere Vue 3 System...</p>
+      <p class="text-sm font-semibold text-slate-400">Loading LibraSphere...</p>
     </div>
   </div>
 

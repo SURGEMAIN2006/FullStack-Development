@@ -5,7 +5,7 @@
       <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div class="space-y-2">
           <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-500/30">
-            <Sparkles class="w-3.5 h-3.5" /> Systematic Library Control Center (Vue 3)
+            <Sparkles class="w-3.5 h-3.5" /> Library Management Overview
           </div>
           <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">
             Welcome back, {{ user?.name }}!

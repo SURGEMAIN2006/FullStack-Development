@@ -10,8 +10,8 @@
       <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white shadow-2xl shadow-indigo-500/40 mb-4">
         <Library class="w-8 h-8" />
       </div>
-      <h2 class="text-3xl font-extrabold text-white tracking-tight">LibraSphere (Vue 3)</h2>
-      <p class="mt-1 text-sm font-medium text-slate-400">Classy & Systematic Library Operating System</p>
+      <h2 class="text-3xl font-extrabold text-white tracking-tight">LibraSphere</h2>
+      <p class="mt-1 text-sm font-medium text-slate-400">Library Management System</p>
     </div>
 
     <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4">

@@ -14,7 +14,7 @@
           </div>
           <div v-if="!isCollapsed" class="truncate">
             <span class="font-extrabold text-lg text-white tracking-tight">LibraSphere</span>
-            <p class="text-[10px] text-slate-400 font-medium tracking-wider uppercase">Vue 3 OS v2.0</p>
+            <p class="text-[10px] text-slate-400 font-medium tracking-wider uppercase">Library Portal</p>
           </div>
         </div>
         <button
