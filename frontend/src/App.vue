@@ -41,6 +41,7 @@
         @open-add-book="handleOpenAddBook"
         @open-edit-book="handleOpenEditBook"
         @open-issue-book="handleOpenIssueBook"
+        @returned="handleBookReturned"
         @delete-book="deleteBookData = $event"
       />
     </main>
@@ -170,7 +171,7 @@ const handleSaveBook = async (bookFormData) => {
       showToast(`Book "${bookFormData.title}" updated successfully!`, 'success');
     } else {
       await api.createBook(bookFormData);
-      showToast(`Book "${bookFormData.title}" added to library!`, 'success');
+      showToast('Book added successfully.', 'success');
     }
     showAddBookModal.value = false;
     editBookData.value = null;
@@ -182,6 +183,10 @@ const handleSaveBook = async (bookFormData) => {
 
 const handleBookIssued = () => {
   showToast('Book issued successfully!', 'success');
+  triggerGlobalRefresh();
+};
+
+const handleBookReturned = () => {
   triggerGlobalRefresh();
 };
 

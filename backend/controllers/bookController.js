@@ -1,5 +1,10 @@
 const { query } = require('../config/db');
 
+const cleanIsbn = (value) => String(value ?? '').trim();
+
+const isDuplicateIsbnError = (err) =>
+  err.code === 'ER_DUP_ENTRY' && /isbn/i.test(err.sqlMessage || err.message || '');
+
 // GET /api/books
 const getAllBooks = async (req, res) => {
   try {
@@ -101,14 +106,14 @@ const createBook = async (req, res) => {
       description, total_copies = 1, cover_image, location_rack = 'Rack A-1'
     } = req.body;
 
-    const cleanIsbn = String(isbn || '').trim();
+    const normalizedIsbn = cleanIsbn(isbn);
 
-    if (!title || !author || !cleanIsbn || !category_id) {
+    if (!title || !author || !normalizedIsbn || !category_id) {
       return res.status(400).json({ success: false, message: 'Title, Author, ISBN, and Category are required.' });
     }
 
     // Check duplicate ISBN
-    const existing = await query('SELECT id FROM books WHERE isbn = ?', [cleanIsbn]);
+    const existing = await query('SELECT id FROM books WHERE isbn = ?', [normalizedIsbn]);
     if (existing.length > 0) {
       return res.status(409).json({ success: false, message: 'A book with this ISBN already exists.' });
     }
@@ -120,7 +125,7 @@ const createBook = async (req, res) => {
     const result = await query(`
       INSERT INTO books (book_code, title, author, isbn, category_id, publisher, publication_year, description, total_copies, available_copies, cover_image, location_rack)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [bookCode, title.trim(), author.trim(), cleanIsbn, parseInt(category_id), publisher || null, publication_year || null, description || null, total, total, defaultCover, location_rack]);
+    `, [bookCode, title.trim(), author.trim(), normalizedIsbn, parseInt(category_id), publisher || null, publication_year || null, description || null, total, total, defaultCover, location_rack]);
 
     const newBookId = result.insertId;
     return res.status(201).json({
@@ -130,6 +135,9 @@ const createBook = async (req, res) => {
     });
   } catch (err) {
     console.error('createBook error:', err);
+    if (isDuplicateIsbnError(err)) {
+      return res.status(409).json({ success: false, message: 'A book with this ISBN already exists.' });
+    }
     return res.status(500).json({ success: false, message: 'Failed to create book.', error: err.message });
   }
 };
@@ -149,11 +157,14 @@ const updateBook = async (req, res) => {
     }
 
     const currentBook = existing[0];
-    const cleanIsbn = isbn !== undefined ? String(isbn).trim() : currentBook.isbn;
+    const normalizedIsbn = isbn !== undefined ? cleanIsbn(isbn) : currentBook.isbn;
+    if (!normalizedIsbn) {
+      return res.status(400).json({ success: false, message: 'ISBN is required.' });
+    }
 
     // Check duplicate ISBN if changed
-    if (cleanIsbn.toLowerCase() !== String(currentBook.isbn).toLowerCase()) {
-      const duplicateCheck = await query('SELECT id FROM books WHERE isbn = ? AND id != ?', [cleanIsbn, id]);
+    if (normalizedIsbn.toLowerCase() !== String(currentBook.isbn).trim().toLowerCase()) {
+      const duplicateCheck = await query('SELECT id FROM books WHERE isbn = ? AND id != ?', [normalizedIsbn, id]);
       if (duplicateCheck.length > 0) {
         return res.status(409).json({ success: false, message: 'A book with this ISBN already exists.' });
       }
@@ -185,7 +196,7 @@ const updateBook = async (req, res) => {
     `, [
       title ? title.trim() : currentBook.title,
       author ? author.trim() : currentBook.author,
-      cleanIsbn,
+      normalizedIsbn,
       category_id ? parseInt(category_id) : currentBook.category_id,
       publisher !== undefined ? publisher : currentBook.publisher,
       publication_year !== undefined ? publication_year : currentBook.publication_year,
@@ -199,6 +210,9 @@ const updateBook = async (req, res) => {
 
     return res.json({ success: true, message: 'Book updated successfully.' });
   } catch (err) {
+    if (isDuplicateIsbnError(err)) {
+      return res.status(409).json({ success: false, message: 'A book with this ISBN already exists.' });
+    }
     return res.status(500).json({ success: false, message: 'Failed to update book.', error: err.message });
   }
 };

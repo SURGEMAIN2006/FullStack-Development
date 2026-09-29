@@ -7,6 +7,10 @@ let mysqlPool = null;
 let memoryStore = null;
 
 const getHashedPassword = (plain) => bcrypt.hashSync(plain, 10);
+const getLocalDate = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
 
 async function initDatabase() {
   const host = process.env.DB_HOST || 'localhost';
@@ -312,11 +316,16 @@ function runMemoryQuery(sql, params = []) {
     }
     if (trimmed.includes('from book_issues')) {
       let list = memoryStore.book_issues;
-      if (trimmed.includes("status = 'issued'")) {
+      if (trimmed.includes("status = 'issued' or (status = 'overdue'")) {
+        list = list.filter(bi => ['Issued', 'Overdue'].includes(bi.status) && !bi.return_date);
+      } else if (trimmed.includes("status in ('issued', 'overdue')") && trimmed.includes('due_date < ?')) {
+        const today = getLocalDate();
+        list = list.filter(bi => ['Issued', 'Overdue'].includes(bi.status) && !bi.return_date && bi.due_date < today);
+      } else if (trimmed.includes("status = 'issued'")) {
         list = list.filter(bi => bi.status === 'Issued');
       } else if (trimmed.includes("status = 'overdue'")) {
-        const today = new Date().toISOString().split('T')[0];
-        list = list.filter(bi => bi.status === 'Overdue' || (bi.status === 'Issued' && bi.due_date < today));
+        const today = getLocalDate();
+        list = list.filter(bi => ['Issued', 'Overdue'].includes(bi.status) && !bi.return_date && bi.due_date < today);
       }
       return [{ count: list.length }];
     }
@@ -423,9 +432,9 @@ function runMemoryQuery(sql, params = []) {
 
       if (trimmed.includes('where bi.id = ?') && params.length >= 1) {
         res = res.filter(bi => Number(bi.id) === Number(params[0]));
-      } else if (trimmed.includes('where (bi.status = \'overdue\'') || trimmed.includes('status = \'overdue\'')) {
-        const today = new Date().toISOString().split('T')[0];
-        res = res.filter(bi => bi.status === 'Overdue' || (bi.status === 'Issued' && bi.due_date < today));
+      } else if (trimmed.includes("bi.status in ('issued', 'overdue')") || trimmed.includes('where (bi.status = \'overdue\'') || trimmed.includes('status = \'overdue\'')) {
+        const today = getLocalDate();
+        res = res.filter(bi => ['Issued', 'Overdue'].includes(bi.status) && !bi.return_date && bi.due_date < today);
       } else if (trimmed.includes('bi.user_id = ?') && params.length >= 1) {
         res = res.filter(bi => Number(bi.user_id) === Number(params[0]));
       }
@@ -506,21 +515,22 @@ function runMemoryQuery(sql, params = []) {
   if (trimmed.startsWith('update book_issues')) {
     const issueId = Number(params[params.length - 1]);
     const issue = memoryStore.book_issues.find(bi => Number(bi.id) === issueId);
-    if (issue) {
+    if (issue && issue.status !== 'Returned' && !issue.return_date) {
       if (trimmed.includes('return_date = ?')) {
         issue.return_date = params[0];
         issue.status = 'Returned';
         issue.fine_amount = parseFloat(params[1]) || 0;
         if (params[2]) issue.notes = params[2];
+        return { affectedRows: 1 };
       }
     }
-    return { affectedRows: 1 };
+    return { affectedRows: 0 };
   }
   if (trimmed.startsWith('update books')) {
     const bookId = Number(params[params.length - 1]);
     const book = memoryStore.books.find(b => Number(b.id) === bookId);
     if (book) {
-      if (trimmed.includes('available_copies = available_copies + 1')) {
+      if (trimmed.includes('available_copies = available_copies + 1') || trimmed.includes('available_copies = least(total_copies, available_copies + 1)')) {
         book.available_copies = Math.min(book.total_copies, book.available_copies + 1);
       } else if (trimmed.includes('available_copies = available_copies - 1')) {
         book.available_copies = Math.max(0, book.available_copies - 1);

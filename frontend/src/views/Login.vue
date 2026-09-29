@@ -6,19 +6,19 @@
       <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-sky-500 rounded-full blur-3xl" />
     </div>
 
-    <div class="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
-      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white shadow-2xl shadow-indigo-500/40 mb-4">
-        <Library class="w-8 h-8" />
+    <div class="sm:mx-auto sm:w-full sm:max-w-sm relative z-10 text-center">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-400 text-white shadow-2xl shadow-indigo-500/40 mb-3">
+        <Library class="w-6 h-6" />
       </div>
-      <h2 class="text-3xl font-extrabold text-white tracking-tight">LibraSphere</h2>
-      <p class="mt-1 text-sm font-medium text-slate-400">Library Management System</p>
+      <h2 class="text-xl font-extrabold text-white tracking-tight">LibraSphere (Vue 3)</h2>
+      <p class="mt-1 text-[10px] font-medium text-slate-400">Classy &amp; Systematic Library Operating System</p>
     </div>
 
-    <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10 px-4">
-      <div class="bg-slate-900/90 border border-slate-800 p-8 shadow-2xl rounded-3xl backdrop-blur-xl">
-        <form class="space-y-5" @submit.prevent="handleSubmit">
+    <div class="mt-5 sm:mx-auto sm:w-full sm:max-w-sm relative z-10 px-4">
+      <div class="bg-slate-900/90 border border-slate-800 p-5 shadow-2xl rounded-2xl backdrop-blur-xl">
+        <form class="space-y-4" @submit.prevent="handleSubmit">
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
               Email Address
             </label>
             <div class="relative">
@@ -26,15 +26,16 @@
               <input
                 type="email"
                 required
+                autocomplete="username"
                 v-model="email"
                 placeholder="name@librasphere.com"
-                class="w-full pl-10 pr-4 py-2.5 bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:border-indigo-500 outline-none text-sm font-medium transition-all"
+                class="w-full pl-10 pr-4 py-2 bg-slate-950/80 border border-slate-800 text-white rounded-lg focus:border-indigo-500 outline-none text-xs font-medium transition-all"
               />
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
               Password
             </label>
             <div class="relative">
@@ -42,22 +43,27 @@
               <input
                 type="password"
                 required
+                autocomplete="current-password"
                 v-model="password"
                 placeholder="••••••••"
-                class="w-full pl-10 pr-4 py-2.5 bg-slate-950/80 border border-slate-800 text-white rounded-xl focus:border-indigo-500 outline-none text-sm font-medium transition-all"
+                class="w-full pl-10 pr-4 py-2 bg-slate-950/80 border border-slate-800 text-white rounded-lg focus:border-indigo-500 outline-none text-xs font-medium transition-all"
               />
             </div>
           </div>
 
           <button
             type="submit"
-            :disabled="loading"
-            class="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-sm font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+            :disabled="submitting"
+            class="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs font-bold rounded-lg shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
           >
-            {{ loading ? 'Authenticating...' : 'Sign In to Dashboard' }}
+            {{ submitting ? 'Authenticating...' : 'Sign In to Dashboard' }}
             <ArrowRight class="w-4 h-4" />
           </button>
         </form>
+
+        <p v-if="loginError" role="alert" class="mt-3 text-center text-xs font-medium text-rose-300">
+          {{ loginError }}
+        </p>
 
         <!-- Quick Demo Login Buttons -->
         <div class="mt-6 pt-6 border-t border-slate-800/80 space-y-2">
@@ -67,6 +73,7 @@
           <div class="grid grid-cols-2 gap-2">
             <button
               type="button"
+              :disabled="submitting"
               @click="handleQuickLogin('admin@librasphere.com', 'admin123')"
               class="px-3 py-2 bg-indigo-950/50 hover:bg-indigo-900/60 border border-indigo-500/30 rounded-xl text-xs font-semibold text-indigo-300 flex items-center justify-center gap-1.5 transition-colors"
             >
@@ -74,6 +81,7 @@
             </button>
             <button
               type="button"
+              :disabled="submitting"
               @click="handleQuickLogin('student@librasphere.com', 'student123')"
               class="px-3 py-2 bg-slate-800/60 hover:bg-slate-800 rounded-xl text-xs font-semibold text-slate-300 flex items-center justify-center gap-1.5 transition-colors"
             >
@@ -101,25 +109,25 @@ import { Library, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-vue-next';
 
 const email = ref('admin@librasphere.com');
 const password = ref('admin123');
-const loading = ref(false);
+const submitting = ref(false);
+const loginError = ref('');
 
 const { login } = useAuth();
 const router = useRouter();
 
-const handleSubmit = async () => {
-  loading.value = true;
+const submitLogin = async (loginEmail = email.value, loginPassword = password.value) => {
+  submitting.value = true;
+  loginError.value = '';
   try {
-    await login(email.value, password.value);
+    await login(loginEmail, loginPassword);
     router.push('/dashboard');
   } catch (err) {
-    console.error(err);
+    loginError.value = err.message || 'Unable to sign in. Please check your details and try again.';
   } finally {
-    loading.value = false;
+    submitting.value = false;
   }
 };
 
-const handleQuickLogin = (demoEmail, demoPass) => {
-  email.value = demoEmail;
-  password.value = demoPass;
-};
+const handleSubmit = () => submitLogin();
+const handleQuickLogin = (demoEmail, demoPass) => submitLogin(demoEmail, demoPass);
 </script>

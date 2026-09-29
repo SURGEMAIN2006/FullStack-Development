@@ -203,6 +203,7 @@
 import { ref, watch, onMounted } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { api } from '../services/api';
+import { formatLocalDate } from '../services/date';
 import StatusBadge from '../components/StatusBadge.vue';
 import { BookMarked, Search, BookDown, X, DollarSign, CheckCircle2 } from 'lucide-vue-next';
 
@@ -216,7 +217,7 @@ const search = ref('');
 const statusFilter = ref('all');
 
 const selectedIssue = ref(null);
-const returnDate = ref(new Date().toISOString().split('T')[0]);
+const returnDate = ref(formatLocalDate(new Date()));
 const fineAmount = ref(0);
 const notes = ref('');
 
@@ -242,7 +243,7 @@ watch([search, statusFilter], fetchIssues);
 
 const handleOpenReturnModal = (issue) => {
   selectedIssue.value = issue;
-  returnDate.value = new Date().toISOString().split('T')[0];
+  returnDate.value = formatLocalDate(new Date());
   fineAmount.value = issue.overdue_days > 0 ? issue.overdue_days * 2.0 : 0;
   notes.value = '';
 };

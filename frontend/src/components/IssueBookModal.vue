@@ -119,6 +119,7 @@
 import { ref, watch } from 'vue';
 import { X, BookUp, CheckCircle2 } from 'lucide-vue-next';
 import { api } from '../services/api';
+import { formatLocalDate } from '../services/date';
 
 const props = defineProps({
   isOpen: Boolean,
@@ -131,11 +132,11 @@ const users = ref([]);
 const books = ref([]);
 const selectedUserId = ref('');
 const selectedBookId = ref('');
-const issueDate = ref(new Date().toISOString().split('T')[0]);
+const issueDate = ref(formatLocalDate(new Date()));
 
 const defaultDue = new Date();
 defaultDue.setDate(defaultDue.getDate() + 14);
-const dueDate = ref(defaultDue.toISOString().split('T')[0]);
+const dueDate = ref(formatLocalDate(defaultDue));
 
 const notes = ref('');
 const loading = ref(false);

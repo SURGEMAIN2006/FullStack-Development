@@ -3,7 +3,8 @@ const { query } = require('../config/db');
 // GET /api/dashboard/stats
 const getStats = async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
     // Summary Cards metrics
     const totalBooksRes = await query(`SELECT COUNT(*) as count, SUM(total_copies) as total_copies, SUM(available_copies) as available_copies FROM books`);
@@ -11,7 +12,7 @@ const getStats = async (req, res) => {
     const totalCopies = parseInt(totalBooksRes[0]?.total_copies || 0);
     const availableBooks = parseInt(totalBooksRes[0]?.available_copies || 0);
 
-    const issuedBooksRes = await query(`SELECT COUNT(*) as count FROM book_issues WHERE status = 'Issued' OR (status = 'Overdue' AND return_date IS NULL)`);
+    const issuedBooksRes = await query(`SELECT COUNT(*) as count FROM book_issues WHERE status IN ('Issued', 'Overdue') AND return_date IS NULL`);
     const issuedBooks = parseInt(issuedBooksRes[0]?.count || 0);
 
     const reservedBooksRes = await query(`SELECT COUNT(*) as count FROM bookings WHERE status IN ('Pending', 'Approved', 'Reserved')`);
@@ -19,7 +20,7 @@ const getStats = async (req, res) => {
 
     const overdueBooksRes = await query(`
       SELECT COUNT(*) as count FROM book_issues 
-      WHERE status = 'Overdue' OR (status = 'Issued' AND due_date < ?)
+      WHERE status IN ('Issued', 'Overdue') AND return_date IS NULL AND due_date < ?
     `, [today]);
     const overdueBooks = parseInt(overdueBooksRes[0]?.count || 0);
 
@@ -83,7 +84,7 @@ const getStats = async (req, res) => {
       FROM book_issues bi
       JOIN users u ON bi.user_id = u.id
       JOIN books b ON bi.book_id = b.id
-      WHERE bi.status = 'Overdue' OR (bi.status = 'Issued' AND bi.due_date < ?)
+      WHERE bi.status IN ('Issued', 'Overdue') AND bi.return_date IS NULL AND bi.due_date < ?
       ORDER BY bi.due_date ASC
       LIMIT 5
     `, [today]);

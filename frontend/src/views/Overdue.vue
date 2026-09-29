@@ -74,6 +74,7 @@
           <div v-if="isAdmin" class="flex items-center gap-2 shrink-0">
             <button
               @click="handleOpenReturnModal(item)"
+              :disabled="processing"
               class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors inline-flex items-center gap-1.5"
             >
               <BookDown class="w-4 h-4" /> Process Return
@@ -141,15 +142,17 @@
 import { ref, onMounted } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { api } from '../services/api';
+import { formatLocalDate } from '../services/date';
 import { ShieldAlert, BookDown, Clock, CheckCircle2 } from 'lucide-vue-next';
 
 const { isAdmin, showToast } = useAuth();
+const emit = defineEmits(['returned']);
 const overdues = ref([]);
 const loading = ref(true);
 const processing = ref(false);
 
 const selectedIssue = ref(null);
-const returnDate = ref(new Date().toISOString().split('T')[0]);
+const returnDate = ref(formatLocalDate(new Date()));
 const fineAmount = ref(0);
 
 const fetchOverdues = async () => {
@@ -169,7 +172,7 @@ onMounted(fetchOverdues);
 
 const handleOpenReturnModal = (item) => {
   selectedIssue.value = item;
-  returnDate.value = new Date().toISOString().split('T')[0];
+  returnDate.value = formatLocalDate(new Date());
   fineAmount.value = (item.overdue_days || 1) * 2.0;
 };
 
@@ -184,11 +187,12 @@ const handleConfirmReturn = async () => {
       return_date: returnDate.value,
       fine_amount: fineAmount.value
     });
-    showToast(res.message || 'Book returned successfully.', 'success');
+    showToast('Book returned successfully.', 'success');
     
     // Instantly remove returned issue from active overdue list
     overdues.value = overdues.value.filter(item => item.id !== targetIssueId);
     selectedIssue.value = null;
+    emit('returned');
     
     // Re-fetch overdues to ensure total sync
     await fetchOverdues();

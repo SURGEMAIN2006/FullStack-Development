@@ -1,7 +1,25 @@
 const { query } = require('../config/db');
 
-// Helper to format date as YYYY-MM-DD
-const formatDate = (d) => new Date(d).toISOString().split('T')[0];
+// Keep DATE values independent of the server's timezone.
+const formatDate = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const dateOnly = (value) => {
+  if (value instanceof Date) return formatDate(value);
+  return String(value).slice(0, 10);
+};
+
+const daysBetween = (from, to) => {
+  const [fromYear, fromMonth, fromDay] = dateOnly(from).split('-').map(Number);
+  const [toYear, toMonth, toDay] = dateOnly(to).split('-').map(Number);
+  const fromUtc = Date.UTC(fromYear, fromMonth - 1, fromDay);
+  const toUtc = Date.UTC(toYear, toMonth - 1, toDay);
+  return Math.max(0, Math.floor((toUtc - fromUtc) / 86400000));
+};
 
 // GET /api/issues
 const getAllIssues = async (req, res) => {
@@ -40,23 +58,15 @@ const getAllIssues = async (req, res) => {
     const issues = await query(sql, params);
 
     // Compute overdue days dynamically
-    const today = new Date();
+    const today = formatDate(new Date());
     const processed = issues.map(item => {
-      let overdueDays = 0;
-      const dueDate = new Date(item.due_date);
-      if (item.status === 'Issued' && today > dueDate) {
-        const diffTime = Math.abs(today - dueDate);
-        overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      } else if (item.status === 'Overdue') {
-        const refDate = item.return_date ? new Date(item.return_date) : today;
-        const diffTime = Math.abs(refDate - dueDate);
-        overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      }
+      const isOverdue = ['Issued', 'Overdue'].includes(item.status) && dateOnly(item.due_date) < today;
+      const overdueDays = isOverdue ? daysBetween(item.due_date, today) : 0;
 
       return {
         ...item,
         overdue_days: overdueDays,
-        status: (item.status === 'Issued' && today > dueDate) ? 'Overdue' : item.status
+        status: isOverdue ? 'Overdue' : item.status
       };
     });
 
@@ -156,28 +166,34 @@ const returnBook = async (req, res) => {
     }
 
     const retDate = return_date || formatDate(new Date());
+    const today = formatDate(new Date());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(retDate) || retDate > today || retDate < dateOnly(issue.issue_date)) {
+      return res.status(400).json({ success: false, message: 'Return date must be a valid date between the issue date and today.' });
+    }
 
     // Calculate overdue fine if not provided
     let calculatedFine = parseFloat(fine_amount) || 0;
-    const dueDate = new Date(issue.due_date);
-    const returnD = new Date(retDate);
-    if (returnD > dueDate && calculatedFine === 0) {
-      const diffDays = Math.ceil((returnD - dueDate) / (1000 * 60 * 60 * 24));
+    if (retDate > dateOnly(issue.due_date) && calculatedFine === 0) {
+      const diffDays = daysBetween(issue.due_date, retDate);
       calculatedFine = diffDays * 2.00; // $2 per day overdue fine
     }
 
     // 1. Update issue record
-    await query(`
+    const result = await query(`
       UPDATE book_issues SET
         return_date = ?,
         status = 'Returned',
         fine_amount = ?,
         notes = ?
-      WHERE id = ?
+      WHERE id = ? AND status IN ('Issued', 'Overdue') AND return_date IS NULL
     `, [retDate, calculatedFine, notes || issue.notes, id]);
 
+    if (result.affectedRows === 0) {
+      return res.status(409).json({ success: false, message: 'This book has already been returned.' });
+    }
+
     // 2. Increase available copies
-    await query(`UPDATE books SET available_copies = available_copies + 1 WHERE id = ?`, [issue.book_id]);
+    await query(`UPDATE books SET available_copies = LEAST(total_copies, available_copies + 1) WHERE id = ?`, [issue.book_id]);
 
     // 3. Queue Check: Is there a pending/approved reservation for this book?
     const reservations = await query(`
@@ -208,7 +224,7 @@ const returnBook = async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Book "${issue.book_title}" returned successfully.`,
+      message: 'Book returned successfully.',
       fine_amount: calculatedFine
     });
   } catch (err) {
@@ -228,15 +244,12 @@ const getOverdue = async (req, res) => {
       FROM book_issues bi
       JOIN users u ON bi.user_id = u.id
       JOIN books b ON bi.book_id = b.id
-      WHERE (bi.status = 'Overdue' OR (bi.status = 'Issued' AND bi.due_date < ?))
+      WHERE bi.status IN ('Issued', 'Overdue') AND bi.return_date IS NULL AND bi.due_date < ?
       ORDER BY bi.due_date ASC
     `, [today]);
 
     const result = overdues.map(item => {
-      const dueDate = new Date(item.due_date);
-      const now = new Date();
-      const diffTime = Math.abs(now - dueDate);
-      const overdueDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const overdueDays = daysBetween(item.due_date, today);
       return {
         ...item,
         overdue_days: overdueDays,
