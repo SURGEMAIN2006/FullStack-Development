@@ -16,6 +16,8 @@
     <Sidebar
       :is-collapsed="isSidebarCollapsed"
       @toggle-sidebar="isSidebarCollapsed = !isSidebarCollapsed"
+      @open-add-book="handleOpenAddBook"
+      @open-issue-book="handleOpenIssueBook"
       :unread-count="unreadNotifCount"
       :overdue-count="overdueCount"
     />
@@ -27,7 +29,7 @@
       @notification-read="fetchGlobalBadgeCounts"
     />
 
-    <!-- Main View Area -->
+    <!-- Main View Area with Reactive Refresh Key -->
     <main
       :class="[
         'flex-1 transition-all duration-300 pt-16 pb-12',
@@ -35,6 +37,7 @@
       ]"
     >
       <router-view
+        :key="$route.fullPath + '-' + refreshKey"
         @open-add-book="handleOpenAddBook"
         @open-edit-book="handleOpenEditBook"
         @open-issue-book="handleOpenIssueBook"
@@ -91,6 +94,7 @@ const route = useRoute();
 const isSidebarCollapsed = ref(false);
 const unreadNotifCount = ref(0);
 const overdueCount = ref(0);
+const refreshKey = ref(0);
 
 const showAddBookModal = ref(false);
 const editBookData = ref(null);
@@ -102,6 +106,11 @@ const deleteBookData = ref(null);
 const categories = ref([]);
 
 const isPublicRoute = computed(() => route.meta?.public === true);
+
+const triggerGlobalRefresh = () => {
+  refreshKey.value++;
+  fetchGlobalBadgeCounts();
+};
 
 const fetchGlobalBadgeCounts = async () => {
   try {
@@ -165,6 +174,7 @@ const handleSaveBook = async (bookFormData) => {
     }
     showAddBookModal.value = false;
     editBookData.value = null;
+    triggerGlobalRefresh();
   } catch (err) {
     showToast(err.message || 'Failed to save book.', 'error');
   }
@@ -172,7 +182,7 @@ const handleSaveBook = async (bookFormData) => {
 
 const handleBookIssued = () => {
   showToast('Book issued successfully!', 'success');
-  fetchGlobalBadgeCounts();
+  triggerGlobalRefresh();
 };
 
 const handleDeleteBookConfirm = async () => {
@@ -181,6 +191,7 @@ const handleDeleteBookConfirm = async () => {
     await api.deleteBook(deleteBookData.value.id);
     showToast(`Book "${deleteBookData.value.title}" deleted.`, 'success');
     deleteBookData.value = null;
+    triggerGlobalRefresh();
   } catch (err) {
     showToast(err.message || 'Failed to delete book.', 'error');
   }

@@ -33,33 +33,51 @@
           <h4 v-if="!isCollapsed" class="px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
             {{ group.title }}
           </h4>
-          <router-link
-            v-for="item in group.items"
-            :key="item.path"
-            :to="item.path"
-            :class="[
-              'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative',
-              $route.path === item.path
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200',
-              isCollapsed ? 'justify-center px-0' : ''
-            ]"
-            :title="isCollapsed ? item.name : undefined"
-          >
-            <component :is="item.icon" class="w-5 h-5 shrink-0 transition-transform group-hover:scale-110" />
-            <span v-if="!isCollapsed" class="truncate">{{ item.name }}</span>
-
-            <span
-              v-if="item.badge"
+          
+          <template v-for="item in group.items" :key="item.name">
+            <!-- Action items with custom handler -->
+            <button
+              v-if="item.isAction"
+              @click="handleActionClick(item.action)"
               :class="[
-                'ml-auto px-2 py-0.5 text-[10px] font-bold rounded-full',
-                item.badgeColor,
-                isCollapsed ? 'absolute -top-1 -right-1 px-1.5' : ''
+                'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative text-left',
+                'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200',
+                isCollapsed ? 'justify-center px-0' : ''
               ]"
+              :title="isCollapsed ? item.name : undefined"
             >
-              {{ item.badge }}
-            </span>
-          </router-link>
+              <component :is="item.icon" class="w-5 h-5 shrink-0 transition-transform group-hover:scale-110" />
+              <span v-if="!isCollapsed" class="truncate">{{ item.name }}</span>
+            </button>
+
+            <!-- Regular router links -->
+            <router-link
+              v-else
+              :to="item.path"
+              :class="[
+                'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative',
+                $route.path === item.path
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200',
+                isCollapsed ? 'justify-center px-0' : ''
+              ]"
+              :title="isCollapsed ? item.name : undefined"
+            >
+              <component :is="item.icon" class="w-5 h-5 shrink-0 transition-transform group-hover:scale-110" />
+              <span v-if="!isCollapsed" class="truncate">{{ item.name }}</span>
+
+              <span
+                v-if="item.badge"
+                :class="[
+                  'ml-auto px-2 py-0.5 text-[10px] font-bold rounded-full',
+                  item.badgeColor,
+                  isCollapsed ? 'absolute -top-1 -right-1 px-1.5' : ''
+                ]"
+              >
+                {{ item.badge }}
+              </span>
+            </router-link>
+          </template>
         </div>
       </div>
     </div>
@@ -130,7 +148,7 @@ const props = defineProps({
   unreadCount: { type: Number, default: 0 }
 });
 
-defineEmits(['toggle-sidebar']);
+const emit = defineEmits(['toggle-sidebar', 'open-add-book', 'open-issue-book']);
 
 const { user, isAdmin, logout } = useAuth();
 const router = useRouter();
@@ -141,6 +159,18 @@ const handleLogout = () => {
   router.push('/login');
 };
 
+const handleActionClick = (action) => {
+  if (action === 'add-book') {
+    router.push('/books');
+    emit('open-add-book');
+  } else if (action === 'issue-book') {
+    router.push('/issues');
+    emit('open-issue-book');
+  } else if (action === 'return-book') {
+    router.push('/issues?status=Issued');
+  }
+};
+
 const navGroups = computed(() => [
   {
     title: 'MAIN MENU',
@@ -148,7 +178,7 @@ const navGroups = computed(() => [
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
       { name: 'Books Catalog', path: '/books', icon: BookOpen },
       ...(isAdmin.value ? [
-        { name: 'Add Book', path: '/books/add', icon: PlusCircle },
+        { name: 'Add Book', path: '/books', icon: PlusCircle, isAction: true, action: 'add-book' },
         { name: 'Categories', path: '/categories', icon: FolderTree }
       ] : [])
     ]
@@ -157,8 +187,8 @@ const navGroups = computed(() => [
     title: 'CIRCULATION',
     items: [
       ...(isAdmin.value ? [
-        { name: 'Issue Book', path: '/issues/new', icon: BookUp },
-        { name: 'Return Book', path: '/issues/return', icon: BookDown }
+        { name: 'Issue Book', path: '/issues', icon: BookUp, isAction: true, action: 'issue-book' },
+        { name: 'Return Book', path: '/issues', icon: BookDown, isAction: true, action: 'return-book' }
       ] : []),
       { name: 'Issued Books', path: '/issues', icon: BookMarked },
       { name: 'Bookings / Reservations', path: '/bookings', icon: BookmarkCheck },

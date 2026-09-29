@@ -24,10 +24,15 @@ export const apiFetch = async (endpoint, options = {}) => {
     headers
   });
 
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (parseErr) {
+    data = { message: 'An unexpected response was received from the server.' };
+  }
 
   if (!response.ok) {
-    const error = new Error(data.message || 'An error occurred during request.');
+    const error = new Error(data.message || `Request failed with status ${response.status}.`);
     error.status = response.status;
     error.data = data;
     throw error;

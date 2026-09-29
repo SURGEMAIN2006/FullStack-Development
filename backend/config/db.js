@@ -293,44 +293,117 @@ function initMemoryStore() {
   };
 }
 
-function runMemoryQuery(sql, params) {
+function runMemoryQuery(sql, params = []) {
   const trimmed = sql.trim().toLowerCase();
-  
+
+  // 1. SELECT COUNT(*) QUERIES
   if (trimmed.startsWith('select count(*)')) {
-    if (trimmed.includes('from users')) return [{ count: memoryStore.users.length }];
-    if (trimmed.includes('from books')) return [{ count: memoryStore.books.length, total_copies: memoryStore.books.reduce((s,b)=>s+b.total_copies,0), available_copies: memoryStore.books.reduce((s,b)=>s+b.available_copies,0) }];
-    if (trimmed.includes('from book_issues')) return [{ count: memoryStore.book_issues.length }];
-    if (trimmed.includes('from bookings')) return [{ count: memoryStore.bookings.length }];
+    if (trimmed.includes('from users')) {
+      let list = memoryStore.users;
+      if (trimmed.includes("where role = 'student'")) list = list.filter(u => u.role === 'student');
+      return [{ count: list.length }];
+    }
+    if (trimmed.includes('from books')) {
+      return [{ 
+        count: memoryStore.books.length, 
+        total_copies: memoryStore.books.reduce((s,b)=>s+b.total_copies,0), 
+        available_copies: memoryStore.books.reduce((s,b)=>s+b.available_copies,0) 
+      }];
+    }
+    if (trimmed.includes('from book_issues')) {
+      let list = memoryStore.book_issues;
+      if (trimmed.includes("status = 'issued'")) {
+        list = list.filter(bi => bi.status === 'Issued');
+      } else if (trimmed.includes("status = 'overdue'")) {
+        const today = new Date().toISOString().split('T')[0];
+        list = list.filter(bi => bi.status === 'Overdue' || (bi.status === 'Issued' && bi.due_date < today));
+      }
+      return [{ count: list.length }];
+    }
+    if (trimmed.includes('from bookings')) {
+      let list = memoryStore.bookings;
+      if (trimmed.includes("status in ('pending', 'approved', 'reserved')")) {
+        list = list.filter(bk => ['Pending', 'Approved', 'Reserved'].includes(bk.status));
+      }
+      if (params.length === 1 && typeof params[0] === 'number') {
+        list = list.filter(bk => bk.book_id === params[0]);
+      }
+      return [{ count: list.length }];
+    }
   }
 
+  // 2. SELECT QUERIES
   if (trimmed.startsWith('select')) {
+    // USERS
     if (trimmed.includes('from users')) {
       let res = memoryStore.users.map(u => ({ ...u }));
-      if (params.length === 1 && typeof params[0] === 'string' && params[0].includes('@')) {
-        res = res.filter(u => u.email === params[0]);
-      } else if (params.length === 1 && typeof params[0] === 'number') {
-        res = res.filter(u => u.id === params[0]);
+      if (trimmed.includes('where email = ?') && params.length >= 1) {
+        res = res.filter(u => u.email.toLowerCase() === String(params[0]).toLowerCase());
+      } else if (trimmed.includes('where id = ?') && params.length >= 1) {
+        res = res.filter(u => Number(u.id) === Number(params[0]));
       }
       return res;
     }
+
+    // CATEGORIES
     if (trimmed.includes('from categories')) {
-      return memoryStore.categories.map(c => ({
+      let res = memoryStore.categories.map(c => ({
         ...c,
         book_count: memoryStore.books.filter(b => b.category_id === c.id).length
       }));
+      if (trimmed.includes('where name = ?') && params.length >= 1) {
+        res = res.filter(c => c.name.toLowerCase() === String(params[0]).toLowerCase());
+      }
+      return res;
     }
+
+    // BOOKS
     if (trimmed.includes('from books')) {
       let res = memoryStore.books.map(b => {
         const cat = memoryStore.categories.find(c => c.id === b.category_id);
         return { ...b, category_name: cat?.name || 'General', category_icon: cat?.icon || 'BookOpen' };
       });
-      if (params.length === 1 && typeof params[0] === 'number') {
-        res = res.filter(b => b.id === params[0]);
+
+      // Exact ISBN check for duplicate ISBN query
+      if (trimmed.includes('where isbn = ?') && params.length === 1) {
+        res = res.filter(b => String(b.isbn).trim().toLowerCase() === String(params[0]).trim().toLowerCase());
+        return res;
+      }
+      if (trimmed.includes('where isbn = ? and id != ?') && params.length === 2) {
+        res = res.filter(b => String(b.isbn).trim().toLowerCase() === String(params[0]).trim().toLowerCase() && Number(b.id) !== Number(params[1]));
+        return res;
+      }
+      if (trimmed.includes('where b.id = ?') || trimmed.includes('where id = ?')) {
+        if (params.length >= 1) {
+          res = res.filter(b => Number(b.id) === Number(params[0]));
+        }
+      }
+      if (trimmed.includes('b.category_id = ?')) {
+        const catId = Number(params[params.length - 1]);
+        res = res.filter(b => b.category_id === catId);
+      }
+      if (trimmed.includes('b.available_copies > 0')) {
+        res = res.filter(b => b.available_copies > 0);
+      } else if (trimmed.includes('b.available_copies = 0')) {
+        res = res.filter(b => b.available_copies === 0);
+      }
+      if (trimmed.includes('like ?') && params.length > 0) {
+        const term = String(params[0]).replace(/%/g, '').toLowerCase();
+        if (term) {
+          res = res.filter(b => 
+            b.title.toLowerCase().includes(term) ||
+            b.author.toLowerCase().includes(term) ||
+            b.isbn.toLowerCase().includes(term) ||
+            (b.category_name && b.category_name.toLowerCase().includes(term))
+          );
+        }
       }
       return res;
     }
+
+    // BOOK ISSUES
     if (trimmed.includes('from book_issues')) {
-      return memoryStore.book_issues.map(bi => {
+      let res = memoryStore.book_issues.map(bi => {
         const u = memoryStore.users.find(x => x.id === bi.user_id);
         const b = memoryStore.books.find(x => x.id === bi.book_id);
         return {
@@ -347,9 +420,21 @@ function runMemoryQuery(sql, params) {
           book_code: b?.book_code || ''
         };
       });
+
+      if (trimmed.includes('where bi.id = ?') && params.length >= 1) {
+        res = res.filter(bi => Number(bi.id) === Number(params[0]));
+      } else if (trimmed.includes('where (bi.status = \'overdue\'') || trimmed.includes('status = \'overdue\'')) {
+        const today = new Date().toISOString().split('T')[0];
+        res = res.filter(bi => bi.status === 'Overdue' || (bi.status === 'Issued' && bi.due_date < today));
+      } else if (trimmed.includes('bi.user_id = ?') && params.length >= 1) {
+        res = res.filter(bi => Number(bi.user_id) === Number(params[0]));
+      }
+      return res;
     }
+
+    // BOOKINGS
     if (trimmed.includes('from bookings')) {
-      return memoryStore.bookings.map(bk => {
+      let res = memoryStore.bookings.map(bk => {
         const u = memoryStore.users.find(x => x.id === bk.user_id);
         const b = memoryStore.books.find(x => x.id === bk.book_id);
         return {
@@ -365,15 +450,27 @@ function runMemoryQuery(sql, params) {
           available_copies: b?.available_copies || 0
         };
       });
+
+      if (trimmed.includes('where bk.id = ?') && params.length >= 1) {
+        res = res.filter(bk => Number(bk.id) === Number(params[0]));
+      }
+      return res;
     }
+
+    // NOTIFICATIONS
     if (trimmed.includes('from notifications')) {
-      return memoryStore.notifications.map(n => {
+      let res = memoryStore.notifications.map(n => {
         const u = memoryStore.users.find(x => x.id === n.user_id);
         return { ...n, user_name: u?.name || 'User' };
       });
+      if (trimmed.includes('where n.user_id = ?') && params.length >= 1) {
+        res = res.filter(n => Number(n.user_id) === Number(params[0]));
+      }
+      return res;
     }
   }
 
+  // 3. INSERT QUERIES
   if (trimmed.startsWith('insert into users')) {
     const id = memoryStore.users.length + 1;
     const newUser = { id, user_code: params[0], name: params[1], email: params[2], password_hash: params[3], role: params[4], phone: params[5], student_id: params[6], department: params[7], avatar_url: params[8], created_at: new Date() };
@@ -382,7 +479,7 @@ function runMemoryQuery(sql, params) {
   }
   if (trimmed.startsWith('insert into books')) {
     const id = memoryStore.books.length + 1;
-    const newBook = { id, book_code: params[0], title: params[1], author: params[2], isbn: params[3], category_id: parseInt(params[4]), publisher: params[5], publication_year: params[6], description: params[7], total_copies: params[8], available_copies: params[9], cover_image: params[10], location_rack: params[11], created_at: new Date() };
+    const newBook = { id, book_code: params[0], title: params[1], author: params[2], isbn: params[3], category_id: parseInt(params[4]), publisher: params[5], publication_year: params[6], description: params[7], total_copies: parseInt(params[8]), available_copies: parseInt(params[9]), cover_image: params[10], location_rack: params[11], created_at: new Date() };
     memoryStore.books.push(newBook);
     return { insertId: id, affectedRows: 1 };
   }
@@ -403,6 +500,96 @@ function runMemoryQuery(sql, params) {
     const newNotif = { id, user_id: parseInt(params[0]), title: params[1], message: params[2], type: params[3], is_read: 0, created_at: new Date() };
     memoryStore.notifications.push(newNotif);
     return { insertId: id, affectedRows: 1 };
+  }
+
+  // 4. UPDATE QUERIES
+  if (trimmed.startsWith('update book_issues')) {
+    const issueId = Number(params[params.length - 1]);
+    const issue = memoryStore.book_issues.find(bi => Number(bi.id) === issueId);
+    if (issue) {
+      if (trimmed.includes('return_date = ?')) {
+        issue.return_date = params[0];
+        issue.status = 'Returned';
+        issue.fine_amount = parseFloat(params[1]) || 0;
+        if (params[2]) issue.notes = params[2];
+      }
+    }
+    return { affectedRows: 1 };
+  }
+  if (trimmed.startsWith('update books')) {
+    const bookId = Number(params[params.length - 1]);
+    const book = memoryStore.books.find(b => Number(b.id) === bookId);
+    if (book) {
+      if (trimmed.includes('available_copies = available_copies + 1')) {
+        book.available_copies = Math.min(book.total_copies, book.available_copies + 1);
+      } else if (trimmed.includes('available_copies = available_copies - 1')) {
+        book.available_copies = Math.max(0, book.available_copies - 1);
+      } else if (params.length >= 12) {
+        book.title = params[0];
+        book.author = params[1];
+        book.isbn = params[2];
+        book.category_id = parseInt(params[3]);
+        book.publisher = params[4];
+        book.publication_year = params[5];
+        book.description = params[6];
+        book.total_copies = parseInt(params[7]);
+        book.available_copies = parseInt(params[8]);
+        book.cover_image = params[9];
+        book.location_rack = params[10];
+      }
+    }
+    return { affectedRows: 1 };
+  }
+  if (trimmed.startsWith('update bookings')) {
+    const bookingId = Number(params[params.length - 1]);
+    const booking = memoryStore.bookings.find(bk => Number(bk.id) === bookingId);
+    if (booking) {
+      if (trimmed.includes('status = ?')) {
+        booking.status = params[0];
+      }
+    }
+    return { affectedRows: 1 };
+  }
+  if (trimmed.startsWith('update notifications')) {
+    if (trimmed.includes('where id = ?')) {
+      const notifId = Number(params[0]);
+      const notif = memoryStore.notifications.find(n => Number(n.id) === notifId);
+      if (notif) notif.is_read = 1;
+    } else {
+      memoryStore.notifications.forEach(n => { n.is_read = 1; });
+    }
+    return { affectedRows: 1 };
+  }
+  if (trimmed.startsWith('update users')) {
+    const userId = Number(params[params.length - 1]);
+    const user = memoryStore.users.find(u => Number(u.id) === userId);
+    if (user && params.length >= 7) {
+      user.name = params[0];
+      user.email = params[1];
+      user.role = params[2];
+      user.phone = params[3];
+      user.student_id = params[4];
+      user.department = params[5];
+      user.password_hash = params[6];
+    }
+    return { affectedRows: 1 };
+  }
+
+  // 5. DELETE QUERIES
+  if (trimmed.startsWith('delete from books')) {
+    const bookId = Number(params[0]);
+    memoryStore.books = memoryStore.books.filter(b => Number(b.id) !== bookId);
+    return { affectedRows: 1 };
+  }
+  if (trimmed.startsWith('delete from categories')) {
+    const catId = Number(params[0]);
+    memoryStore.categories = memoryStore.categories.filter(c => Number(c.id) !== catId);
+    return { affectedRows: 1 };
+  }
+  if (trimmed.startsWith('delete from users')) {
+    const userId = Number(params[0]);
+    memoryStore.users = memoryStore.users.filter(u => Number(u.id) !== userId);
+    return { affectedRows: 1 };
   }
 
   return { insertId: 1, affectedRows: 1, rows: [] };

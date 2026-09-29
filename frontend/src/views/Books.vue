@@ -268,13 +268,13 @@
         <div class="pt-4 border-t border-slate-100 flex items-center gap-3">
           <template v-if="isAdmin">
             <button
-              @click="const b = selectedBook; selectedBook = null; $emit('open-issue-book', b);"
+              @click="handleDrawerIssue"
               class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md"
             >
               Issue This Book
             </button>
             <button
-              @click="const b = selectedBook; selectedBook = null; $emit('open-edit-book', b);"
+              @click="handleDrawerEdit"
               class="p-2.5 text-slate-600 hover:bg-slate-100 rounded-xl"
             >
               <Edit3 class="w-4 h-4" />
@@ -282,7 +282,7 @@
           </template>
           <template v-else>
             <button
-              @click="const b = selectedBook; selectedBook = null; handleReserveBook(b);"
+              @click="handleDrawerReserve"
               class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md"
             >
               Reserve This Book
@@ -312,7 +312,7 @@ import {
   X
 } from 'lucide-vue-next';
 
-defineEmits(['open-add-book', 'open-issue-book', 'open-edit-book', 'delete-book']);
+const emit = defineEmits(['open-add-book', 'open-issue-book', 'open-edit-book', 'delete-book']);
 
 const { isAdmin, showToast } = useAuth();
 const route = useRoute();
@@ -370,5 +370,23 @@ const handleReserveBook = async (book) => {
   } catch (err) {
     showToast(err.message || 'Failed to place reservation.', 'error');
   }
+};
+
+const handleDrawerIssue = () => {
+  const b = selectedBook.value;
+  selectedBook.value = null;
+  emit('open-issue-book', b);
+};
+
+const handleDrawerEdit = () => {
+  const b = selectedBook.value;
+  selectedBook.value = null;
+  emit('open-edit-book', b);
+};
+
+const handleDrawerReserve = () => {
+  const b = selectedBook.value;
+  selectedBook.value = null;
+  handleReserveBook(b);
 };
 </script>

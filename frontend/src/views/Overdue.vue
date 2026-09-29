@@ -24,16 +24,21 @@
         <Clock class="w-5 h-5 text-rose-600" /> Overdue Items Requiring Librarian Action
       </h3>
 
+      <!-- Loading State -->
       <div v-if="loading" class="space-y-3">
-        <div v-for="i in 4" :key="i" class="h-20 bg-slate-100 rounded-2xl animate-pulse" />
+        <div v-for="i in 4" :key="i" class="h-20 bg-slate-100 rounded-2xl animate-pulse flex items-center px-4">
+          <span class="text-xs text-slate-400 font-medium">Loading overdue books...</span>
+        </div>
       </div>
 
+      <!-- Zero Overdues State -->
       <div v-else-if="overdues.length === 0" class="p-12 text-center text-emerald-600 space-y-2">
         <ShieldAlert class="w-12 h-12 mx-auto text-emerald-500 opacity-80" />
-        <h4 class="font-bold text-base">Great news! Zero overdue items</h4>
+        <h4 class="font-bold text-base">No overdue books.</h4>
         <p class="text-xs text-slate-500">All issued books are within their valid borrowing windows.</p>
       </div>
 
+      <!-- Overdue Items List -->
       <div v-else class="space-y-3">
         <div
           v-for="item in overdues"
@@ -58,6 +63,7 @@
                 Student: <strong class="text-slate-900">{{ item.student_name }}</strong> ({{ item.student_id || item.student_email }})
               </p>
               <div class="flex items-center gap-4 text-[11px] text-slate-500">
+                <span>Issue Code: <strong class="font-mono text-indigo-600">{{ item.issue_code }}</strong></span>
                 <span>Issue Date: <strong>{{ item.issue_date }}</strong></span>
                 <span>Due Date: <strong class="text-rose-600">{{ item.due_date }}</strong></span>
               </div>
@@ -90,6 +96,7 @@
             <label class="block text-xs font-bold text-slate-700 mb-1">Return Date</label>
             <input
               type="date"
+              required
               v-model="returnDate"
               class="w-full px-3.5 py-2 text-sm border rounded-xl"
             />
@@ -100,6 +107,7 @@
             <input
               type="number"
               step="0.50"
+              min="0"
               v-model.number="fineAmount"
               class="w-full px-3.5 py-2 text-sm border rounded-xl font-bold"
             />
@@ -108,16 +116,19 @@
           <div class="flex justify-end gap-2 pt-2">
             <button
               type="button"
+              :disabled="processing"
               @click="selectedIssue = null"
-              class="px-4 py-2 text-xs font-semibold text-slate-600"
+              class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
             >
               Cancel
             </button>
             <button
               type="submit"
-              class="px-5 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-md"
+              :disabled="processing"
+              class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-50 inline-flex items-center gap-1.5"
             >
-              Confirm Check-In
+              <CheckCircle2 class="w-4 h-4" />
+              {{ processing ? 'Processing...' : 'Confirm Check-In' }}
             </button>
           </div>
         </form>
@@ -130,11 +141,12 @@
 import { ref, onMounted } from 'vue';
 import { useAuth } from '../composables/useAuth';
 import { api } from '../services/api';
-import { ShieldAlert, BookDown, Clock } from 'lucide-vue-next';
+import { ShieldAlert, BookDown, Clock, CheckCircle2 } from 'lucide-vue-next';
 
 const { isAdmin, showToast } = useAuth();
 const overdues = ref([]);
 const loading = ref(true);
+const processing = ref(false);
 
 const selectedIssue = ref(null);
 const returnDate = ref(new Date().toISOString().split('T')[0]);
@@ -146,7 +158,8 @@ const fetchOverdues = async () => {
     const res = await api.getOverdueIssues();
     overdues.value = res.overdues || [];
   } catch (err) {
-    console.error(err);
+    console.error('Failed to fetch overdues:', err);
+    showToast(err.message || 'Unable to connect to the server.', 'error');
   } finally {
     loading.value = false;
   }
@@ -162,16 +175,28 @@ const handleOpenReturnModal = (item) => {
 
 const handleConfirmReturn = async () => {
   if (!selectedIssue.value) return;
+
+  const targetIssueId = selectedIssue.value.id;
+  processing.value = true;
+
   try {
-    const res = await api.returnBook(selectedIssue.value.id, {
+    const res = await api.returnBook(targetIssueId, {
       return_date: returnDate.value,
       fine_amount: fineAmount.value
     });
-    showToast(res.message, 'success');
+    showToast(res.message || 'Book returned successfully.', 'success');
+    
+    // Instantly remove returned issue from active overdue list
+    overdues.value = overdues.value.filter(item => item.id !== targetIssueId);
     selectedIssue.value = null;
-    fetchOverdues();
+    
+    // Re-fetch overdues to ensure total sync
+    await fetchOverdues();
   } catch (err) {
-    showToast(err.message || 'Failed to return book.', 'error');
+    console.error('returnBook error:', err);
+    showToast(err.message || 'Unable to process the return. Please try again.', 'error');
+  } finally {
+    processing.value = false;
   }
 };
 </script>

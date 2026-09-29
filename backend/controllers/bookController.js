@@ -15,7 +15,7 @@ const getAllBooks = async (req, res) => {
 
     if (search) {
       sql += ` AND (b.title LIKE ? OR b.author LIKE ? OR b.isbn LIKE ? OR c.name LIKE ? OR b.publisher LIKE ?)`;
-      const term = `%${search}%`;
+      const term = `%${search.trim()}%`;
       params.push(term, term, term, term, term);
     }
 
@@ -101,14 +101,16 @@ const createBook = async (req, res) => {
       description, total_copies = 1, cover_image, location_rack = 'Rack A-1'
     } = req.body;
 
-    if (!title || !author || !isbn || !category_id) {
+    const cleanIsbn = String(isbn || '').trim();
+
+    if (!title || !author || !cleanIsbn || !category_id) {
       return res.status(400).json({ success: false, message: 'Title, Author, ISBN, and Category are required.' });
     }
 
     // Check duplicate ISBN
-    const existing = await query('SELECT id FROM books WHERE isbn = ?', [isbn]);
+    const existing = await query('SELECT id FROM books WHERE isbn = ?', [cleanIsbn]);
     if (existing.length > 0) {
-      return res.status(400).json({ success: false, message: 'A book with this ISBN already exists.' });
+      return res.status(409).json({ success: false, message: 'A book with this ISBN already exists.' });
     }
 
     const bookCode = `BK-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -118,7 +120,7 @@ const createBook = async (req, res) => {
     const result = await query(`
       INSERT INTO books (book_code, title, author, isbn, category_id, publisher, publication_year, description, total_copies, available_copies, cover_image, location_rack)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [bookCode, title, author, isbn, category_id, publisher || null, publication_year || null, description || null, total, total, defaultCover, location_rack]);
+    `, [bookCode, title.trim(), author.trim(), cleanIsbn, parseInt(category_id), publisher || null, publication_year || null, description || null, total, total, defaultCover, location_rack]);
 
     const newBookId = result.insertId;
     return res.status(201).json({
@@ -147,6 +149,15 @@ const updateBook = async (req, res) => {
     }
 
     const currentBook = existing[0];
+    const cleanIsbn = isbn !== undefined ? String(isbn).trim() : currentBook.isbn;
+
+    // Check duplicate ISBN if changed
+    if (cleanIsbn.toLowerCase() !== String(currentBook.isbn).toLowerCase()) {
+      const duplicateCheck = await query('SELECT id FROM books WHERE isbn = ? AND id != ?', [cleanIsbn, id]);
+      if (duplicateCheck.length > 0) {
+        return res.status(409).json({ success: false, message: 'A book with this ISBN already exists.' });
+      }
+    }
 
     // If total_copies is updated, calculate available copy delta
     let newTotal = total_copies !== undefined ? parseInt(total_copies) : currentBook.total_copies;
@@ -172,10 +183,10 @@ const updateBook = async (req, res) => {
         location_rack = ?
       WHERE id = ?
     `, [
-      title || currentBook.title,
-      author || currentBook.author,
-      isbn || currentBook.isbn,
-      category_id || currentBook.category_id,
+      title ? title.trim() : currentBook.title,
+      author ? author.trim() : currentBook.author,
+      cleanIsbn,
+      category_id ? parseInt(category_id) : currentBook.category_id,
       publisher !== undefined ? publisher : currentBook.publisher,
       publication_year !== undefined ? publication_year : currentBook.publication_year,
       description !== undefined ? description : currentBook.description,
